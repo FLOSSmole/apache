@@ -25,14 +25,23 @@ archiveListPage = urllib2.urlopen(req).read()
 
 mainSoup = BeautifulSoup(archiveListPage, 'html.parser')
 allUrl = mainSoup.find_all('a')
-schemaList = []
+tableList = []
 for url in allUrl:
     isolatedName = ''
     url = str(url.get('href'))
     if url != 'None':
         isolatedName = url.split('/')[0]
-        schemaList.append(isolatedName)
+        tableList.append(isolatedName)
         
-# schemaList contains all of the project names that will need a schema. ther should be 358 different schema            
+# tableList contains all of the email archive titles
+           
+schemaList = []
+projectList = mainSoup.find_all('option')
+for Schema in projectList:
+    schemaName = Schema.get('value')
+    schemaList.append(schemaName)
+
+# schemaList contains the names for each section of email archives
+# most will have multiple tables from tableList
 
     
