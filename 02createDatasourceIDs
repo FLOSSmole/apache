@@ -1,0 +1,82 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Wed Jun 28 13:51:07 2017
+
+@author: jhartmann
+"""
+from bs4 import BeautifulSoup
+import pymysql
+import datetime
+import urllib.request
+try:
+    import urllib.request as urllib2
+except ImportError:
+    import urllib2
+    
+pw = ''
+dbuser = ''
+dbhost = ''
+db = ''
+dbconn = pymysql.connect(host= dbhost,
+                         user= dbuser,
+                         passwd= pw,
+                         db= db,
+                         use_unicode=True,
+                         charset="utf8mb4")
+           
+cursor = dbconn.cursor()
+
+
+newDatasource = 'INSERT INTO datasources (datasource_id, \
+                                         forge_id, \
+                                         friendly_name, \
+                                         date_donated, \
+                                         contact_person, \
+                                         comments, \
+                                         start_date, \
+                                         end_date) \
+                                         VALUES(%s, %s, %s, %s, %s, %s, %s, %s)'
+                                         
+hdr = {'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.11 (KHTML, like Gecko) Chrome/23.0.1271.64 Safari/537.11',
+       'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+       'Accept-Charset': 'ISO-8859-1,utf-8;q=0.7,*;q=0.3',
+       'Accept-Encoding': 'none',
+       'Accept-Language': 'en-US,en;q=0.8',
+       'Connection': 'keep-alive'}
+                     
+
+def getProjectList():
+    archiveHome = 'http://mail-archives.apache.org/mod_mbox/'       
+    req = urllib2.Request(archiveHome,headers=hdr)
+    archiveListPage = urllib2.urlopen(req).read()
+    mainSoup = BeautifulSoup(archiveListPage, 'html.parser')
+    allUrl = mainSoup.find_all('a')
+    tableList = []
+    for url in allUrl:
+        isolatedName = ''
+        url = str(url.get('href'))
+        if url != 'None':
+            isolatedName = url.replace('/','')
+            tableList.append(isolatedName)
+    return tableList
+    
+forge_id = 33
+dataID = 70917 
+i = 0   
+for project in getProjectList():
+    dataSourceId = dataID + i 
+    forge = forge_id
+    name = project + ' email collection July 2017'
+    date = datetime.datetime.now()
+    contact = 'jhartmann@elon.edu'
+    comments = 'Not Started'
+    start_date = '2017-06-29'
+    end_date = '2017-07-04'
+    
+    print(dataSourceId, forge, name, date, contact, comments, start_date, end_date)
+    cursor.execute(newDatasource,(dataSourceId, forge, name, date, contact, comments, start_date, end_date))
+    dbconn.commit()
+    
+    i = i + 1
+dbconn.close()
