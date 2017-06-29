@@ -5,7 +5,7 @@ Created on Tue Jun 27 09:51:37 2017
 
 @author: jhartmann
 """
-
+import codecs
 import sys
 import pymysql
 import datetime
@@ -18,27 +18,25 @@ try:
 except ImportError:
     import urllib2
 
+### Connection being made to the datasource ID database "ossmole_merged"    
+    
 pw = ''
 dbuser = ''
 dbhost = ''
-dbconn = pymysql.connect(host= dbhost,
-                         user= dbuser,
-                         passwd= pw,
-                         db= db,
-                         use_unicode=True,
-                         charset="utf8mb4")
-           
-cursor = dbconn.cursor()
+datadb = ''
 
 dbconnD = pymysql.connect(host = dbhost,
                           user = dbuser,
                           passwd = pw,
-                          db = 'ossmole_merged'
+                          db = datadb,
                           use_unicode=True,
                           charset="utf8mb4")
 cursorD = dbconnD.cursor()
 
+#################################################################################################################### 
 
+### SQL Queries that are called later
+### hdr for getting the pages also included here "hdr"
 
 insertEmails = 'INSERT INTO Apache_emails (datasource_id, \
                                                    email_list, \
@@ -51,7 +49,19 @@ insertEmails = 'INSERT INTO Apache_emails (datasource_id, \
                                                    complete_message, \
                                                    body_text,\
                                                    last_updated)\
-                                                   VALUES  (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)'    
+                                                   VALUES  (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)'   
+                                                   
+updateStatus = 'UPDATE datasources SET \
+                date_donated = %s, \
+                comments = %s, \
+                WHERE forge_id = "33" \
+                AND contact_person = "jhartmann@elon.edu" \
+                AND friendly_name = %s'
+       
+selectDataSource = 'SELECT datasource_id from datasources \
+                    WHERE friendly_name = %s \
+                    AND contact_person = "jhartmann@elon.edu" \
+                    AND forge_id = "33"'
                                                    
                      
 hdr = {'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.11 (KHTML, like Gecko) Chrome/23.0.1271.64 Safari/537.11',
@@ -80,7 +90,6 @@ def getProjectList():
         if url != 'None':
             isolatedName = url.replace('/','')
             tableList.append(isolatedName)
-    print(tableList)
     return tableList
  
   
@@ -92,17 +101,18 @@ def getProjectList():
 def createTable(tableName):
 
     tableFormat = '(datasource_id INT, \
+                    email_id INT NOT NULL AUTO_INCREMENT, \
                     email_list varchar(250), \
-                    subject varchar(100), \
+                    subject varchar(400), \
                     from_name varchar(100), \
                     from_email varchar(100), \
-                    email_date datetime, \
+                    email_date varchar(200), \
                     mbox_name varchar(50), \
-                    complete_message text, \
-                    message_id varchar(256), \
-                    body_text text, \
+                    complete_message mediumtext, \
+                    message_id varchar(257), \
+                    body_text mediumtext, \
                     last_updated datetime, \
-                    PRIMARY KEY(message_id, email_date))'
+                    PRIMARY KEY(email_id))'
     
     # Deals with the variable incubator tags and titles
                     
@@ -151,26 +161,40 @@ def createTable(tableName):
                          charset="utf8mb4")
        cursor = dbconn.cursor()
        cursor.execute('CREATE TABLE ' + newTableName + tableFormat)
+    dbconn.close()
+    print('New Table: ',newTableName,'in database: ', db)
+    return db
 
+#################################################################################################################### 
+    
 updateStatus = 'UPDATE datasources SET \
-                (date_donated = %s, \
+                date_donated = %s, \
                 comments = %s, \
                 WHERE forge_id = "33" \
                 AND contact_person = "jhartmann@elon.edu" \
-                AND friendly_name = %s')
+                AND friendly_name = %s'
+       
+selectDataSource = 'SELECT datasource_id from datasources \
+                    WHERE friendly_name = %s \
+                    AND contact_person = "jhartmann@elon.edu" \
+                    AND forge_id = "33"'
           
-                
+### I think I can delete this section
+                    
 ####################################################################################################################                
                 
 ### takes the name of the email List (Ex: aries-dev)
 ### Gets monthly email archives in an Mbox Form
 ### Mbox file stored locally as "currentArchive.mbox"
 def getMonthlyMboxArchive(emailListTitleAllMonths):
+    name = emailListTitleAllMonths + ' email collection July 2017'
     ### The line below will create the table in the database. Be careful
-    #createTable(emailListTitleAllMonths)
-    datasourceID = 
+    db = createTable(emailListTitleAllMonths)
+  
+    cursorD.execute(selectDataSource, (name))
+    datasourceID = cursorD.fetchone()[0] 
+    print('          PROJECT: ', name,'   Datasource ID: ', datasourceID,'    Database: ', db)
     emailListCompleteDate = 'http://mail-archives.apache.org/mod_mbox/' + emailListTitleAllMonths + '/'
-    print(emailListCompleteDate)
     req = urllib2.Request(emailListCompleteDate,headers=hdr)
     fullArchive = urllib2.urlopen(req).read()  
     soup = BeautifulSoup(fullArchive, 'html.parser')
@@ -184,14 +208,25 @@ def getMonthlyMboxArchive(emailListTitleAllMonths):
                 dateUrl = link.get('href')
                 if '/thread' in dateUrl:
                     dateId = dateUrl.split('/')[0]
-                    archiveAddress = emailListCompleteDate + dateId
-                    print('=====', dateId, emailListTitleAllMonths, '======')
-                    urllib.request.urlretrieve(archiveAddress, 'currentArchive.mbox')
-                    emailMboxParse('currentArchive.mbox', emailListTitleAllMonths, dateId,datasourceID)
+                    archiveDateId = int(dateId.split('.')[0])
+                    if archiveDateId < 201707:
+                        archiveAddress = emailListCompleteDate + dateId
+                        print('                   =====', dateId,  '======', emailListTitleAllMonths, '=====', db)
+                        urllib.request.urlretrieve(archiveAddress, 'currentArchive.mbox')
+                        emailMboxParse('currentArchive.mbox', emailListTitleAllMonths, dateId,datasourceID,db)
     status = 'Completed'
     name = emailListTitleAllMonths + ' email collection July 2017'
-    cursorD.execute(updateStatus,(time, status, name))
-    dbconnD.commit()
+    dbconn = pymysql.connect(host= dbhost,
+                         user= dbuser,
+                         passwd= pw,
+                         db= db,
+                         use_unicode=True,
+                         charset="utf8mb4")
+
+    dbconn.close()
+#    cursorD.execute(updateStatus,(time, status, name))
+#    dbconnD.commit()
+#    dbconn.close()
     
     
 ####################################################################################################################          
@@ -200,21 +235,17 @@ def getMonthlyMboxArchive(emailListTitleAllMonths):
 ### It turns the messages, that look crappy, into plain text as intended to view
 ### I could have left them as normal "payload" but if we ant this later we can us the message that is stores as a whole 
 ### in the database
-## This Works For Now                 
+             
 def convertMessageToText(message):
-    if message.is_multipart():   #Walk through the parts of the email to find the text body.
+    if message.is_multipart():   
             for part in message.walk():
-                if part.is_multipart(): # If part is multipart, walk through the subparts.
+                if part.is_multipart(): 
                     for subpart in part.walk():
                         if subpart.get_content_type() == 'text/plain':
-                            for k,v in subpart.items():
-                                if k == 'Content-Transfer-Encoding':
-                                    cte = v             # Keep the Content Transfer Encoding
+                            content = subpart.get_payload()
                 elif subpart.get_content_type() == 'text/plain':
-                    content = part.get_payload()           # part isn't multipart Get the payload
-                    for k,v in part.items():
-                        if k == 'Content-Transfer-Encoding':
-                            cte = v       
+                    content = part.get_payload()           
+     
     else:
             content = message.get_payload(decode=True).decode()
     return content
@@ -225,12 +256,19 @@ def convertMessageToText(message):
 ### The table should have been created previously
 ### It also connects to the correct database (SOON)
     
-def populateTable(tableName, datasourceID, emailList, subject, fname, femail, date, messageID, mboxName, fullMessage, body, time):
-   
-    
+def populateTable(tableName, datasourceID, emailList, subject, fname, femail, date, messageID, mboxName, fullMessage, body, time, db):
+    db = db
+    dbconn = pymysql.connect(host= dbhost,
+                         user= dbuser,
+                         passwd= pw,
+                         db= db,
+                         use_unicode=True,
+                         charset="utf8mb4")
+    cursor = dbconn.cursor()
+
     executeParts = '(datasource_id, \
                      email_list, \
-                     subject \
+                     subject, \
                      from_name, \
                      from_email, \
                      email_date, \
@@ -239,66 +277,67 @@ def populateTable(tableName, datasourceID, emailList, subject, fname, femail, da
                      complete_message, \
                      body_text,\
                      last_updated)\
-                     VALUES  (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)' 
-    executeLine = 'INSERT IN '+tableName+' '+executeParts
-    
-#   try:
-#       dbconn.execute(executeLine, (datasourceID, emailList, subject, fname, femail, date, messageID, mboxName, fullMessage, body, time))
-#       dbconn.commit()
-#   except pymysql.Error as error:
-#            print(error)
-#            dbconn.rollback()
+                     VALUES  (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)' 
+    executeLine = 'INSERT INTO '+tableName+' '+executeParts
+
+
+    try:
+        cursor.execute(executeLine, (datasourceID, emailList, subject, fname, femail, date, messageID, mboxName, fullMessage, body, time))
+        dbconn.commit()
+    except pymysql.Error as error:
+             print(error)
+             dbconn.rollback()
+             
+    dbconn.close()
+
 
 ####################################################################################################################          
     
 ### This function takes the mbox file saved and created in getMonthlyMboxArchive
 ### it also takes in the email list name, the monthly mbox file name (dateId) and the datasourceID
 ### The function will use the message and email.util APIs to parse the message and pull out crucial pieces
-### The entire message is also preserved
+### The entire message is also preserved as "fullMessage"
+### Note: in a few rare cases, the message cannot convert certain characters from .mbox to message
 ### The parsed information is then passed into the populateTable function
 
-def emailMboxParse(mboxfile, listName, dateId, datasourceID):
+er = 0
+def emailMboxParse(mboxfile, listName, dateId, datasourceID, db):
      tableName = listName.replace('-','_') + '_email'
      for message in mailbox.mbox(mboxfile):
         fromLine = str(message['From'])
         fname,femail = email.utils.parseaddr(fromLine)
         subject = str(message['Subject'])
         date = str(message['Date'])
-        print(date, fname, femail)
-        
         messageID = str(message['Message-ID'])
+
         try:
             content = convertMessageToText(message)
         except:
             content = message.get_payload()
-        
-            
+
         mboxName = dateId
-        fullMessage = message  
+        try: 
+            message = message.as_string()
+        except:
+            message = 'None'
+        
+        fullMessage = message
+        
         body = content
         time = datetime.datetime.now()  
-        populateTable(tableName, datasourceID, listName, subject, fname, femail, date, messageID, mboxName, fullMessage, body, time)
-#            dbconn.commit()
-#    
-#        except pymysql.Error as error:
-#            print(error)
-#            dbconn.rollback()  
-        
-        print ("**************************************" )
+        populateTable(tableName, datasourceID, listName, subject, fname, femail, date, messageID, mboxName, fullMessage, body, time, db)
         
 #################################################################################################################### 
 
 ###This is the only part of the code nead to be altered to run
 ### The code above is all functions and commands that work within each other
 
-#for project in getProjectList():
-#    print(project)
-#    getMonthlyMboxArchive(project)
-#getMonthlyMboxArchive('accumulo-commits')
+for project in getProjectList():
+    getMonthlyMboxArchive(project)
 
 
-dbconn.close()            
-                
+dbconnD.close()            
+
                 
 
     
