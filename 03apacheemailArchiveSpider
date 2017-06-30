@@ -21,9 +21,9 @@ except ImportError:
 ### Connection being made to the datasource ID database "ossmole_merged"    
     
 pw = ''
-dbuser = ''
-dbhost = ''
-datadb = ''
+dbuser = '
+dbhost = 'flossdata.syr.edu'
+datadb = 'ossmole_merged'
 
 dbconnD = pymysql.connect(host = dbhost,
                           user = dbuser,
@@ -305,32 +305,35 @@ def populateTable(tableName, datasourceID, emailList, subject, fname, femail, da
 
 def emailMboxParse(mboxfile, listName, dateId, datasourceID, db):
      tableName = listName.replace('-','_') + '_email'
-     for message in mailbox.mbox(mboxfile):
-        fromLine = str(message['From'])
-        fname,femail = email.utils.parseaddr(fromLine)
-        subject = str(message['Subject'])
-        date = str(message['Date'])
-        messageID = str(message['Message-ID'])
-
-        try:
-            content = convertMessageToText(message)
-        except:
-            content = message.get_payload()
-
-        mboxName = dateId
-        try: 
-            message = message.as_string()
-        except:
-            message = 'None'
+     try:
+         for message in mailbox.mbox(mboxfile):
+            fromLine = str(message['From'])
+            fname,femail = email.utils.parseaddr(fromLine)
+            subject = str(message['Subject'])
+            date = str(message['Date'])
+            messageID = str(message['Message-ID'])
+    
+            try:
+                content = convertMessageToText(message)
+            except:
+                content = message.get_payload()
+    
+            mboxName = dateId
+            try: 
+                message = message.as_string()
+            except:
+                message = 'None'
+                
+            # Convert to String Error occurs when there is a encoding error in the .mbox file
+            # 
             
-        # Convert to String Error occurs when there is a encoding error in the .mbox file
-        # 
-        
-        fullMessage = message
-        
-        body = content
-        time = datetime.datetime.now()  
-        populateTable(tableName, datasourceID, listName, subject, fname, femail, date, messageID, mboxName, fullMessage, body, time, db)
+            fullMessage = message
+            
+            body = content
+            time = datetime.datetime.now()  
+            populateTable(tableName, datasourceID, listName, subject, fname, femail, date, messageID, mboxName, fullMessage, body, time, db)
+     except:
+         print('Mbox parse Error')
         
 #################################################################################################################### 
 
@@ -338,7 +341,8 @@ def emailMboxParse(mboxfile, listName, dateId, datasourceID, db):
 ### The code above is all functions and commands that work within each other
 
 for project in getProjectList():
-    getMonthlyMboxArchive(project)
+    if getProjectList().index(project) > 4:
+        getMonthlyMboxArchive(project)
 
 
 dbconnD.close()            
