@@ -20,8 +20,8 @@ except ImportError:
 
 ### Connection being made to the datasource ID database "ossmole_merged"    
     
-pw = ''
-dbuser = '
+pw = 'Earwig53'
+dbuser = 'jhartmann'
 dbhost = 'flossdata.syr.edu'
 datadb = 'ossmole_merged'
 
@@ -261,13 +261,7 @@ def convertMessageToText(message):
     
 def populateTable(tableName, datasourceID, emailList, subject, fname, femail, date, messageID, mboxName, fullMessage, body, time, db):
     db = db
-    dbconn = pymysql.connect(host= dbhost,
-                         user= dbuser,
-                         passwd= pw,
-                         db= db,
-                         use_unicode=True,
-                         charset="utf8mb4")
-    cursor = dbconn.cursor()
+
 
     executeParts = '(datasource_id, \
                      email_list, \
@@ -282,7 +276,13 @@ def populateTable(tableName, datasourceID, emailList, subject, fname, femail, da
                      last_updated)\
                      VALUES  (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)' 
     executeLine = 'INSERT INTO '+tableName+' '+executeParts
-
+    dbconn = pymysql.connect(host= dbhost,
+                         user= dbuser,
+                         passwd= pw,
+                         db= db,
+                         use_unicode=True,
+                         charset="utf8mb4")
+    cursor = dbconn.cursor()
 
     try:
         cursor.execute(executeLine, (datasourceID, emailList, subject, fname, femail, date, messageID, mboxName, fullMessage, body, time))
@@ -338,12 +338,14 @@ def emailMboxParse(mboxfile, listName, dateId, datasourceID, db):
 #################################################################################################################### 
 
 ###This is the only part of the code nead to be altered to run
-### The code above is all functions and commands that work within each other
+### The code above is all functions and commands that work within each othe
+
+### This program was broken down to run on multiple machines. 
 
 for project in getProjectList():
-    if getProjectList().index(project) > 4:
+    if getProjectList().index(project) > 199:
         getMonthlyMboxArchive(project)
-
+print(getProjectList().index('commons-issues'))
 
 dbconnD.close()            
 
