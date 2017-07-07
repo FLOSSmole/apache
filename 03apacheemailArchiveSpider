@@ -345,7 +345,7 @@ def emailMboxParse(mboxfile, listName, dateId, datasourceID, db):
 for project in getProjectList():
     if getProjectList().index(project) > 199:
         getMonthlyMboxArchive(project)
-print(getProjectList().index('commons-issues'))
+
 
 dbconnD.close()            
 
