@@ -342,8 +342,9 @@ def emailMboxParse(mboxfile, listName, dateId, datasourceID, db):
 
 ### This program was broken down to run on multiple machines. 
 
-for project in getProjectList():
-    if getProjectList().index(project) > 199:
+projectList = getProjectList()
+for project in projectList:
+    if projectList.index(project) > 199:
         getMonthlyMboxArchive(project)
 
 
