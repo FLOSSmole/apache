@@ -1,0 +1,213 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Fri Jun 30 10:45:34 2017
+
+@author: jhartmann
+"""
+
+import calendar
+import sys
+import pymysql
+import datetime
+from bs4 import BeautifulSoup
+from titlecase import titlecase
+try:
+    import urllib.request as urllib2
+except ImportError:
+    import urllib2
+
+   
+    
+pw = ''
+dbuser = 'jhartmann'
+dbhost = 'flossdata.syr.edu'
+db = ''
+
+
+
+hdr = {'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.11 (KHTML, like Gecko) Chrome/23.0.1271.64 Safari/537.11',
+       'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+       'Accept-Charset': 'ISO-8859-1,utf-8;q=0.7,*;q=0.3',
+       'Accept-Encoding': 'none',
+       'Accept-Language': 'en-US,en;q=0.8',
+       'Connection': 'keep-alive'}
+
+def getDatabaseName(tableName):
+            
+    if 'incubator-' in tableName:
+       projectNameIsolated = tableName.split('-')[1]
+       try: 
+           schemaName = 'apache_'+projectNameIsolated+'_incubator'
+           
+           db = schemaName
+           try:
+               dbconn = pymysql.connect(host= dbhost,
+                             user= dbuser,
+                             passwd= pw,
+                             db= db,
+                             use_unicode=True,
+                             charset="utf8mb4")
+               dbconn.close()
+           except:
+               db = 'apache_incubator'
+       except:
+           schemaName = 'apache_incubator'
+           dbconn = pymysql.connect(host= dbhost,
+                         user= dbuser,
+                         passwd= pw,
+                         db= db,
+                         use_unicode=True,
+                         charset="utf8mb4")
+           dbconn.close()
+           db = schemaName
+           
+    #major projects and simple names should fall into the below catergory
+           
+    else:
+       projectNameIsolated = tableName.split('-')[0]
+       schemaName = 'apache_' + projectNameIsolated
+       if 'www-' in tableName:
+           schemaName = 'apache_asf_wide'
+       db = schemaName
+       
+    tableName = tableName.replace('-','_') + '_email'
+    toReturn = []
+    toReturn.append(db)
+    toReturn.append(tableName)
+    return toReturn
+    
+def getProjectList():
+    print('getProjectList')
+    archiveHome = 'http://mail-archives.apache.org/mod_mbox/'       
+    req = urllib2.Request(archiveHome,headers=hdr)
+    archiveListPage = urllib2.urlopen(req).read()
+    mainSoup = BeautifulSoup(archiveListPage, 'html.parser')
+    allUrl = mainSoup.find_all('a')
+    tableList = []
+    for url in allUrl:
+        isolatedName = ''
+        url = str(url.get('href'))
+        if url != 'None':
+            isolatedName = url.replace('/','')
+            tableList.append(isolatedName)
+    return tableList
+
+                       
+def cleanData(db, table):
+    dbName = db 
+    dbtest = pymysql.connect(host = dbhost,
+                         user = dbuser,
+                         passwd = pw,
+                         db = dbName,
+                         use_unicode=True,
+                         charset = "utf8mb4")
+    cursor = dbtest.cursor()
+    updateTableColumn = 'ALTER TABLE ' + table + ' \
+                         ADD email_date_clean VARCHAR(100),\
+                             from_name_clean VARCHAR(200),\
+                             organization VARCHAR(100)'
+                             
+    cursor.execute(updateTableColumn)
+                             
+    for email in selectEmails(db, table):
+        newDate = cleanDate(email[3])
+        fromName = cleanName(email[1])
+        emailNum = email[4]
+        femail = email[2]
+        updateEmailTable(newDate, fromName, emailNum, femail, table, db)
+    
+    dbtest.close()
+         
+def selectEmails(db, table):
+    tableName = table
+    dbName = db
+    dbselect = pymysql.connect(host = dbhost,
+                         user = dbuser,
+                         passwd = pw,
+                         db = dbName,
+                         use_unicode=True,
+                         charset = "utf8mb4")
+    cursorS = dbselect.cursor()
+    
+    
+    emailParts = 'SELECT email_list, \
+                   from_name, \
+                   from_email, \
+                   email_date,\
+                   email_id, \
+                   FROM '
+    selectEmailsCommand = emailParts + tableName
+    cursorS.execute(selectEmailsCommand)
+    emailList = cursorS.fetchall()
+    dbselect.close()
+    return emailList
+    
+      
+def cleanDate(textDate):
+    date = textDate.split(', ')[1]
+    #25 Mar 2014 14:43:45 +0000 (UTC)
+    date = date.split(' -')[0]
+    date = date.split(' +')[0]
+    #25 Mar 2014 14:43:45
+    dateparts = []  
+    dateparts = date.split(' ')
+    dateMonthWord = dateparts[1]
+    monthNum = str(list(calendar.month_abbr).index(dateMonthWord))
+        
+  
+    dateNum = dateparts[0]
+    dateYear = dateparts[2]
+    dateTime = dateparts[3]
+    
+    dateString = dateYear + '-' + monthNum + '-' + dateNum
+    dateAndTime = dateString + ' '+ dateTime
+    return dateAndTime
+
+def cleanName(ogName):
+    if '=' in ogName:
+        trueName = 'Unknown'
+    elif ogName == '':
+        trueName = 'Unknown'
+    if '(' in ogName:
+        trueName = ogName.split('(')[0]
+    if '[' in ogName:
+        trueName = ogName.split('[')[0]
+    
+    
+    if ' ' in trueName:
+        trueName = titlecase(trueName)
+    if ',' in trueName:
+        first = trueName.split(', ')[1]
+        last = trueName.split(', ')[0]
+        trueName = first + ' ' + last  
+    return trueName
+    
+    
+def updateEmailTable(date, name, emailNum, femail, tableName, dbName):
+    firstLine = 'from_name_clean = %s, \
+                 email_date_clean = %s \
+                 WHERE email_id = %s \
+                 AND from_email = %s'
+    executeLine = 'UPDATE ' + tableName + ' SET ' + firstLine
+    
+    dbupdate = pymysql.connect(host = dbhost,
+                         user = dbuser,
+                         passwd = pw,
+                         db = dbName,
+                         use_unicode=True,
+                         charset = "utf8mb4")
+    cursorU = dbupdate.cursor()
+   
+    cursorU.execute(executeLine,(name, date, emailNum, femail))
+    dbupdate.commit
+    
+                   
+projectList = getProjectList()
+#print(projectList)
+for project in projectList:
+    databaseName = getDatabaseName(project)[0]
+    tableName = getDatabaseName(project)[1]
+    cleanData(databaseName, tableName)
+
+         
