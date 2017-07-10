@@ -70,7 +70,7 @@ CREATE database apache_deltaspike;
 CREATE database apache_devicemap;
 CREATE database apache_directmemory;
 CREATE database apache_directory;
-CREATE database apache_distributedlog_incubator;
+CREATE database apache_distributedlog;
 CREATE database apache_drill;
 CREATE database apache_eagle;
 CREATE database apache_edgent_incubator;
@@ -359,7 +359,7 @@ GRANT ALL PRIVILEGES ON `apache\_deltaspike`.* TO 'jhartmann'@'%'WITH GRANT OPTI
 GRANT ALL PRIVILEGES ON `apache\_devicemap`.* TO 'jhartmann'@'%'WITH GRANT OPTION;
 GRANT ALL PRIVILEGES ON `apache\_directmemory`.* TO 'jhartmann'@'%'WITH GRANT OPTION;
 GRANT ALL PRIVILEGES ON `apache\_directory`.* TO 'jhartmann'@'%'WITH GRANT OPTION;
-GRANT ALL PRIVILEGES ON `apache\_distributedlog_incubator`.* TO 'jhartmann'@'%'WITH GRANT OPTION;
+GRANT ALL PRIVILEGES ON `apache\_distributedlog`.* TO 'jhartmann'@'%'WITH GRANT OPTION;
 GRANT ALL PRIVILEGES ON `apache\_drill`.* TO 'jhartmann'@'%'WITH GRANT OPTION;
 GRANT ALL PRIVILEGES ON `apache\_eagle`.* TO 'jhartmann'@'%'WITH GRANT OPTION;
 GRANT ALL PRIVILEGES ON `apache\_edgent_incubator`.* TO 'jhartmann'@'%'WITH GRANT OPTION;
