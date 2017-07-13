@@ -1,0 +1,281 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Fri Jun 30 10:45:34 2017
+
+@author: jhartmann
+"""
+
+import calendar
+import sys
+import pymysql
+import datetime
+
+
+   
+    
+pw = ''
+dbuser = 'jhartmann'
+dbhost = 'flossdata.syr.edu'
+db = ''
+
+#########################################################################################################
+    
+def getProjectList():
+    db = 'information_schema'
+    selectTables = 'SELECT TABLE_NAME, \
+                    TABLE_SCHEMA \
+                    From TABLES \
+                    WHERE table_schema LIKE "apache%" \
+                    AND TABLE_Name LIKE "%email"'
+                    
+    dbProjects = pymysql.connect(host= dbhost,
+                             user= dbuser,
+                             passwd= pw,
+                             db= db,
+                             use_unicode=True,
+                             charset="utf8mb4")
+    projCursor = dbProjects.cursor()
+    projCursor.execute(selectTables)
+    tableList = projCursor.fetchall()
+    return tableList
+    dbProjects.close()
+
+#########################################################################################################
+    
+def cleanData(db, table):
+    dbName = db 
+    dbtest = pymysql.connect(host = dbhost,
+                         user = dbuser,
+                         passwd = pw,
+                         db = dbName,
+                         use_unicode=True,
+                         charset = "utf8mb4")
+    cursor = dbtest.cursor()
+    
+    updateTableColumn = 'ALTER TABLE ' + table + ' \
+                         ADD (email_date_clean VARCHAR(100),\
+                             from_name_clean VARCHAR(200),\
+                             screen_name VARCHAR(50),\
+                             organization VARCHAR(100))'
+    try:                         
+        cursor.execute(updateTableColumn)        
+    except: 
+        print('tableUpdatedPreviously')   
+    dbtest.close()                      
+    for email in selectEmails(db, table):
+        newDate = cleanDate(email[3])
+        fromName = cleanName(email[1], email[2])
+        emailNum = email[4]
+        femail = email[2]
+        userOrg = getUserOrg(fromName)
+        screenName = userOrg[0]
+        org = userOrg[1]
+        updateEmailTable(newDate, fromName, screenName, org, emailNum, femail, table, db)
+
+#########################################################################################################
+         
+def selectEmails(db, table):
+    tableName = table
+    dbName = db
+    dbselect = pymysql.connect(host = dbhost,
+                         user = dbuser,
+                         passwd = pw,
+                         db = dbName,
+                         use_unicode=True,
+                         charset = "utf8mb4")
+    cursorS = dbselect.cursor()
+    
+    
+    emailParts = 'SELECT email_list, \
+                   from_name, \
+                   from_email, \
+                   email_date,\
+                   email_id \
+                   FROM '
+    selectEmailsCommand = emailParts + tableName
+    cursorS.execute(selectEmailsCommand)
+    emailList = cursorS.fetchall()
+    dbselect.close()
+    return emailList
+
+#########################################################################################################
+    
+def getUserOrg(name):
+    dbconnUser = pymysql.connect(host = dbhost,
+                          user = dbuser,
+                          passwd = pw,
+                          db = 'test',
+                          use_unicode=True,
+                          charset="utf8mb4")
+    cursorUser = dbconnUser.cursor()
+
+    userName = ''
+    organization = ''
+    
+    getUserNameServer = 'SELECT svn_id \
+                         FROM apache_committers_updated \
+                         WHERE real_name = %s'
+                         
+    getOrganization = 'SELECT organization_name \
+                       FROM apache_committers_updated \
+                       WHERE svn_id = %s \
+                       AND organization_name <> ""'  
+                       
+    cursorUser.execute(getUserNameServer, (name))
+    try:
+        userName = cursorUser.fetchone()[0]
+    except:
+        userName = ''
+    
+    if userName != '':
+        try:
+            cursorUser.execute(getOrganization, (userName))
+            organization = cursorUser.fetchone()[0]
+        except:
+            organization = ''
+    else:
+        organization = ''
+        
+    infoList = []
+    infoList.append(userName)
+    infoList.append(organization)
+    
+    dbconnUser.close()
+    return infoList
+#########################################################################################################
+     
+def cleanDate(textDate):
+    date = textDate.split(', ')[1]
+    #25 Mar 2014 14:43:45 +0000 (UTC)
+    date = date.split(' -')[0]
+    date = date.split(' +')[0]
+    #25 Mar 2014 14:43:45
+    dateparts = []  
+    dateparts = date.split(' ')
+    dateMonthWord = dateparts[1]
+    monthNum = str(list(calendar.month_abbr).index(dateMonthWord))
+        
+  
+    dateNum = dateparts[0]
+    dateYear = dateparts[2]
+    dateTime = dateparts[3]
+    
+    dateString = dateYear + '-' + monthNum + '-' + dateNum
+    dateAndTime = dateString + ' '+ dateTime
+    return dateAndTime
+#########################################################################################################
+
+def realNamefromEmail(femail):
+    realName = ''
+    if '@apache.org' in femail and 'jira' not in femail:
+        userName = femail.split('@')[0]
+        realName = getRealName(userName)
+    
+    return(realName)
+
+#########################################################################################################
+    
+def getRealName(userName):
+    dbconnUser = pymysql.connect(host = dbhost,
+                          user = dbuser,
+                          passwd = pw,
+                          db = 'test',
+                          use_unicode=True,
+                          charset="utf8mb4")
+    cursorUser = dbconnUser.cursor()
+
+    getRealName = 'SELECT real_name FROM apache_committers_updated WHERE svn_id = %s' 
+    try:
+        cursorUser.execute(getRealName, (userName))
+        name = cursorUser.fetchone()[0]   
+        dbconnUser.close()
+    except:
+        name = 'Unknown'
+        dbconnUser.close()
+    return(name)
+ 
+#########################################################################################################
+    
+def cleanName(ogName, femail):
+    trueName = ogName
+    if '=' in ogName:
+        trueName = 'Unknown'
+    elif ogName == '':
+        trueName = realNamefromEmail(femail)
+    if '(' in ogName:
+        trueName = ogName.split('(')[0]
+    if '[' in ogName:
+        trueName = ogName.split('[')[0]
+    
+    
+    if ' ' in trueName:
+        trueName = trueName.title()
+    if ',' in trueName:
+        first = trueName.split(', ')[1]
+        last = trueName.split(', ')[0]
+        trueName = first + ' ' + last  
+        
+    if ' ' not in trueName:
+        getRealNameServer = 'SELECT real_name \
+                          FROM apache_committers_updated \
+                          WHERE svn_id = %s'
+                          
+        dbconnUser = pymysql.connect(host = dbhost,
+                          user = dbuser,
+                          passwd = pw,
+                          db = 'test',
+                          use_unicode=True,
+                          charset="utf8mb4")
+        cursorUser = dbconnUser.cursor()
+        cursorUser.execute(getRealNameServer, (trueName))
+        try:
+            trueName = cursorUser.fetchone()[0]
+        except:
+            trueName = 'Unknown'
+        
+    return trueName
+    
+    
+def updateEmailTable(date, name, screenName, org, emailNum, femail, tableName, dbName):
+    updatePieces = ' from_name_clean = %s, \
+                  email_date_clean = %s, \
+                  last_updated = %s, \
+                  screen_name = %s, \
+                  organization = %s \
+                  WHERE email_id = %s'
+                  
+    executeLine = 'UPDATE ' + tableName + ' SET ' + updatePieces
+    dbupdate = pymysql.connect(host = dbhost,
+                         user = dbuser,
+                         passwd = pw,
+                         db = dbName,
+                         use_unicode=True,
+                         charset = "utf8mb4")
+    cursorU = dbupdate.cursor()
+    now = datetime.datetime.now() 
+    print(emailNum, date, screenName, org)
+    
+    try:
+        cursorU.execute(executeLine,(name, date, now, screenName, org, emailNum))
+        dbupdate.commit()
+        dbupdate.close()
+    except pymysql.Error as error:
+             print(error)
+             dbupdate.rollback()
+    
+   
+                   
+projectList = getProjectList()
+#print(projectList)
+i = 1
+for project in projectList:
+    databaseName = ''
+    tableName = ''
+    databaseName = projectList[i][1]
+    tableName = projectList[i][0]
+    print('############################################', databaseName, tableName)
+    cleanData(databaseName, tableName)
+    i = i + 1
+
+         
