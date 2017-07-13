@@ -14,7 +14,7 @@ import datetime
 
    
     
-pw = ''
+pw = 'Earwig53'
 dbuser = 'jhartmann'
 dbhost = 'flossdata.syr.edu'
 db = ''
@@ -153,11 +153,16 @@ def cleanDate(textDate):
     #25 Mar 2014 14:43:45
     dateparts = []  
     dateparts = date.split(' ')
+    if dateparts[0] == '':
+        dateparts.pop(0)
+            
     dateMonthWord = dateparts[1]
     monthNum = str(list(calendar.month_abbr).index(dateMonthWord))
         
   
     dateNum = dateparts[0]
+#    if int(dateNum) < 10 and '0' not in dateNum:
+#        dateNum = '0' + dateNum
     dateYear = dateparts[2]
     dateTime = dateparts[3]
     
@@ -268,7 +273,7 @@ def updateEmailTable(date, name, screenName, org, emailNum, femail, tableName, d
                    
 projectList = getProjectList()
 #print(projectList)
-i = 1
+i = 3
 for project in projectList:
     databaseName = ''
     tableName = ''
