@@ -14,7 +14,7 @@ import datetime
 
    
     
-pw = ''
+pw = 'Earwig53'
 dbuser = 'jhartmann'
 dbhost = 'flossdata.syr.edu'
 db = ''
@@ -68,7 +68,8 @@ def cleanData(db, table, i):
         cursor.execute(updateTableColumn)        
     except: 
         print('tableUpdatedPreviously')   
-    dbtest.close()                      
+    dbtest.close() 
+                         
     for email in selectEmails(db, table):
         newDate = cleanDate(email[3])
         fromName = cleanName(email[1], email[2])[0]
@@ -102,7 +103,7 @@ def selectEmails(db, table):
                    email_date,\
                    email_id \
                    FROM '
-    selectEmailsCommand = emailParts + tableName
+    selectEmailsCommand = emailParts + tableName + ' WHERE email_id  > 9854' 
     cursorS.execute(selectEmailsCommand)
     emailList = cursorS.fetchall()
     dbselect.close()
@@ -179,28 +180,29 @@ def getUserOrg(name, svn):
 ### returns  the date/time in Datetime format
 
 def cleanDate(textDate):
-    date = textDate.split(' ', 1)[1]
-    #25 Mar 2014 14:43:45 +0000 (UTC)
-    date = date.split(' -')[0]
-    date = date.split(' +')[0]
-    #25 Mar 2014 14:43:45
-    dateparts = []  
-    dateparts = date.split(' ')
-    if dateparts[0] == '':
-        dateparts.pop(0)
+    try:
+        date = textDate.split(' ', 1)[1]
+        #25 Mar 2014 14:43:45 +0000 (UTC)
+        date = date.split(' -')[0]
+        date = date.split(' +')[0]
+        #25 Mar 2014 14:43:45
+        dateparts = []  
+        dateparts = date.split(' ')
+        if dateparts[0] == '':
+            dateparts.pop(0)
+                
+        dateMonthWord = dateparts[1]
+        monthNum = str(list(calendar.month_abbr).index(dateMonthWord))
             
-    dateMonthWord = dateparts[1]
-    monthNum = str(list(calendar.month_abbr).index(dateMonthWord))
+      
+        dateNum = dateparts[0]
+        dateYear = dateparts[2]
+        dateTime = dateparts[3]
         
-  
-    dateNum = dateparts[0]
-#    if int(dateNum) < 10 and '0' not in dateNum:
-#        dateNum = '0' + dateNum
-    dateYear = dateparts[2]
-    dateTime = dateparts[3]
-    
-    dateString = dateYear + '-' + monthNum + '-' + dateNum
-    dateAndTime = dateString + ' '+ dateTime
+        dateString = dateYear + '-' + monthNum + '-' + dateNum
+        dateAndTime = dateString + ' '+ dateTime
+    except: 
+        dateAndTime = ''
     return dateAndTime
 #########################################################################################################
 ### This function is executed when there is no known name from the email
