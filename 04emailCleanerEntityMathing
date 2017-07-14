@@ -14,12 +14,14 @@ import datetime
 
    
     
-pw = 'Earwig53'
+pw = ''
 dbuser = 'jhartmann'
 dbhost = 'flossdata.syr.edu'
 db = ''
 
 #########################################################################################################
+### Gets the list of tables and which database they are in from the server
+### this only works for emails, not irc chat
     
 def getProjectList():
     db = 'information_schema'
@@ -42,8 +44,12 @@ def getProjectList():
     dbProjects.close()
 
 #########################################################################################################
-    
-def cleanData(db, table):
+### Main portion that branches off to the seperate cleaning programs
+### it also updates the table to add the new columns for the fresh data
+### it does not return anything
+### it leaads the the Update statement
+
+def cleanData(db, table, i):
     dbName = db 
     dbtest = pymysql.connect(host = dbhost,
                          user = dbuser,
@@ -65,16 +71,19 @@ def cleanData(db, table):
     dbtest.close()                      
     for email in selectEmails(db, table):
         newDate = cleanDate(email[3])
-        fromName = cleanName(email[1], email[2])
+        fromName = cleanName(email[1], email[2])[0]
         emailNum = email[4]
         femail = email[2]
-        userOrg = getUserOrg(fromName)
+        screenName = cleanName(email[1], email[2])[1]
+        userOrg = getUserOrg(fromName, screenName)
         screenName = userOrg[0]
         org = userOrg[1]
-        updateEmailTable(newDate, fromName, screenName, org, emailNum, femail, table, db)
+        updateEmailTable(newDate, fromName, screenName, org, emailNum, femail, table, db, i)
 
 #########################################################################################################
-         
+### Selects emails from the table and databse given,
+### returns a list of all emails to be cleaned
+
 def selectEmails(db, table):
     tableName = table
     dbName = db
@@ -100,8 +109,12 @@ def selectEmails(db, table):
     return emailList
 
 #########################################################################################################
-    
-def getUserOrg(name):
+### takes in the determinned true name and screen name
+### returns the organization afiliation if available
+### if the screen name is not alerady determinned from the 
+### fromName  this will try and get it from the committer table
+  
+def getUserOrg(name, svn):
     dbconnUser = pymysql.connect(host = dbhost,
                           user = dbuser,
                           passwd = pw,
@@ -120,13 +133,29 @@ def getUserOrg(name):
     getOrganization = 'SELECT organization_name \
                        FROM apache_committers_updated \
                        WHERE svn_id = %s \
-                       AND organization_name <> ""'  
-                       
-    cursorUser.execute(getUserNameServer, (name))
-    try:
-        userName = cursorUser.fetchone()[0]
-    except:
-        userName = ''
+                       AND organization_name <> ""' 
+        
+    getUserName2Server = 'SELECT svn_id \
+                         FROM apache_committers_updated \
+                         WHERE svn_id = %s'                   
+    
+    if svn == '':
+        try:
+            cursorUser.execute(getUserNameServer, (name))
+            userName = cursorUser.fetchone()[0]
+        except:
+            userName = ''
+   
+    # Test to see if the svn from the from colum stored previously as svn
+    # is a true svn, it can also just be a github username or some irrelevant
+    # naming function that can't be connected with this program
+    
+    else:
+        try:
+            cursorUser.execute(getUserName2Server, (svn))
+            userName = cursorUser.fetchone()[0]
+        except:
+            userName = ''
     
     if userName != '':
         try:
@@ -144,9 +173,13 @@ def getUserOrg(name):
     dbconnUser.close()
     return infoList
 #########################################################################################################
-     
+### The date was previously stored in a text format in the database
+### This funciton takes in the date as text
+### it breaks it into the smaller parts 
+### returns  the date/time in Datetime format
+
 def cleanDate(textDate):
-    date = textDate.split(', ')[1]
+    date = textDate.split(' ', 1)[1]
     #25 Mar 2014 14:43:45 +0000 (UTC)
     date = date.split(' -')[0]
     date = date.split(' +')[0]
@@ -170,6 +203,9 @@ def cleanDate(textDate):
     dateAndTime = dateString + ' '+ dateTime
     return dateAndTime
 #########################################################################################################
+### This function is executed when there is no known name from the email
+### this function then executes the getRealName function if qualifications are met
+### it returns a real Name 
 
 def realNamefromEmail(femail):
     realName = ''
@@ -180,7 +216,10 @@ def realNamefromEmail(femail):
     return(realName)
 
 #########################################################################################################
-    
+### getRealName takes in the user name and runs a Select query
+### if successfull it returns the real name that is associated
+### if unsuccessful the realName is returned as 'Unknown'
+
 def getRealName(userName):
     dbconnUser = pymysql.connect(host = dbhost,
                           user = dbuser,
@@ -201,9 +240,16 @@ def getRealName(userName):
     return(name)
  
 #########################################################################################################
-    
+### This function takes in the assumed trueName of the sender from the mbox getter and cleaner
+### it also takes in the from email
+### the name (if previously existing) is stripped and cleaned
+### if no name is found, the email is used in attempt to retrieve the name
+### this function may also refine the screen name during its processes
+### which is returned as well (otherwishe screenName = '')
+
 def cleanName(ogName, femail):
     trueName = ogName
+    screenName = ''
     if '=' in ogName:
         trueName = 'Unknown'
     elif ogName == '':
@@ -222,27 +268,20 @@ def cleanName(ogName, femail):
         trueName = first + ' ' + last  
         
     if ' ' not in trueName:
-        getRealNameServer = 'SELECT real_name \
-                          FROM apache_committers_updated \
-                          WHERE svn_id = %s'
-                          
-        dbconnUser = pymysql.connect(host = dbhost,
-                          user = dbuser,
-                          passwd = pw,
-                          db = 'test',
-                          use_unicode=True,
-                          charset="utf8mb4")
-        cursorUser = dbconnUser.cursor()
-        cursorUser.execute(getRealNameServer, (trueName))
-        try:
-            trueName = cursorUser.fetchone()[0]
-        except:
-            trueName = 'Unknown'
+        if '@apache' in femail:
+            trueName = realNamefromEmail(femail)
+            screenName = femail.split('@')
+        else:
+            screenName = trueName
+            trueName = getRealName(screenName)
         
-    return trueName
+    nameDetails = []
+    nameDetails.append(trueName)
+    nameDetails.append(screenName)
+    return nameDetails
     
     
-def updateEmailTable(date, name, screenName, org, emailNum, femail, tableName, dbName):
+def updateEmailTable(date, name, screenName, org, emailNum, femail, tableName, dbName, i):
     updatePieces = ' from_name_clean = %s, \
                   email_date_clean = %s, \
                   last_updated = %s, \
@@ -259,7 +298,7 @@ def updateEmailTable(date, name, screenName, org, emailNum, femail, tableName, d
                          charset = "utf8mb4")
     cursorU = dbupdate.cursor()
     now = datetime.datetime.now() 
-    print(emailNum, date, screenName, org)
+    print(i, emailNum, date, screenName, org)
     
     try:
         cursorU.execute(executeLine,(name, date, now, screenName, org, emailNum))
@@ -273,14 +312,14 @@ def updateEmailTable(date, name, screenName, org, emailNum, femail, tableName, d
                    
 projectList = getProjectList()
 #print(projectList)
-i = 3
+i = 4
 for project in projectList:
     databaseName = ''
     tableName = ''
     databaseName = projectList[i][1]
     tableName = projectList[i][0]
     print('############################################', databaseName, tableName)
-    cleanData(databaseName, tableName)
+    cleanData(databaseName, tableName, i)
     i = i + 1
 
          
