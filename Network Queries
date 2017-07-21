@@ -1,0 +1,19 @@
+---Get Top Companies---
+SELECT organization_name, count(*)
+FROM `apache_committers`
+GROUP BY organization_name
+ORDER BY `apache_committers`.`organization_name`  ASC
+
+---Edge List with certain companies involved---
+SELECT a.svn_id as SOURCE, b.svn_id as Target, count(a.project_name) as Weight, a.organization_name as Org 
+FROM test.apache_committers a 
+INNER JOIN test.apache_committers b ON a.project_name=b.project_name 
+WHERE a.datasource_id = 70910 AND b.datasource_id = 70910 
+AND (a.organization_name = 'Facebook' Or a.organization_name = 'Twitter' Or a.organization_name = 'Google' 
+OR a.organization_name = ' Uber' OR a.organization_name = 'Microsoft') 
+AND a.project_name <> 'incubator' 
+AND a.project_name NOT LIKE '%pmc' 
+AND b.project_name <> 'incubator' 
+AND b.project_name NOT LIKE '%pmc' 
+AND a.svn_id != b.svn_id 
+GROUP BY 1,2 ORDER BY 3 DESC
